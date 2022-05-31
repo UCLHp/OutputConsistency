@@ -30,8 +30,8 @@ Roos = ['3126', '3128', '3131', '3132']
 Semiflex = ['142438', '142586', '142587']
 El = ['92579', '92580', '92581']
 Ch = Roos
-en_layers = ['18', '6', '3','1']
-layers = [list(range(240,69,-10)),[240,210,170,140,110,70],[240,160,70],list(range(160,159,-10))]
+en_layers = ['18', '5','1']
+layers = [list(range(240,69,-10)),[240,200,150,100,70],list(range(160,159,-10))]
 ref_data = {'Gantry 1': [0.620718228,
                          0.619059209,
                          0.617768717,
@@ -143,16 +143,16 @@ def calc_metrics(i):
                     diff_color='orange'
                 else:
                     diff_color='green'
-                window['diff'+i]('%.3f' % d_diff, background_color=diff_color)
+                window['diff'+i]('%.3f' % d_diff, background_color=diff_color, text_color='white')
             except:
                 window['ad'+i]('')
-                window['diff'+i]('',background_color=diff_color)
+                window['diff'+i]('', background_color=diff_color, text_color='black')
         
         return r_mean, r_range, d, d_diff
     else:
         window['rm'+i]('')
         window['rang'+i]('')
-        window['diff'+i]('',background_color=diff_color)
+        window['diff'+i]('',background_color=diff_color, text_color='black')
         window['ad'+i]('')
 
 def pre_analysis_check(values):
@@ -168,7 +168,7 @@ def pre_analysis_check(values):
 ### GUI window function
 def build_window():
     #theme
-    #sg.theme('NeutralBlue')
+    sg.theme('DefaultNoMoreNagging')
 
     #equipment
     sess0_layout = [
@@ -261,11 +261,11 @@ def build_window():
 
     #buttons
     button_layout = [
-        [sg.B('Submit to Database', disabled=True, key='-Submit-'),
-        sg.B('Analyse Session', key='-AnalyseS-'),
-        sg.FolderBrowse('Export to CSV', key='-CSV_WRITE-', disabled=True, target='-Export-'), sg.In(key='-Export-', enable_events=True, visible=False),
-        sg.B('Clear', key='-Clear-'),
-        sg.B('End Session', key='-Cancel-')],
+        [sg.B('Analyse Session', key='-AnalyseS-'),
+         sg.B('Submit to Database', disabled=True, key='-Submit-'),
+         sg.FolderBrowse('Export to CSV', key='-CSV_WRITE-', disabled=True, target='-Export-'), sg.In(key='-Export-', enable_events=True, visible=False),
+         #sg.B('Clear', key='-Clear-'),
+         sg.B('End Session', key='-Cancel-')],
     ]
 
     #combine layout elements
@@ -279,7 +279,7 @@ def build_window():
         [button_layout],
     ]
 
-    icon_file = os.path.abspath(os.path.join(os.path.dirname(__file__), 'icon', 'cucumber2_yd4_icon.ico'))
+    icon_file = os.path.abspath(os.path.join(os.path.dirname(__file__), 'icon', 'strawberry_icon.ico'))
     return sg.Window('Output Consistency', layout, resizable=True, finalize=True, icon=icon_file)
 
 
@@ -302,6 +302,8 @@ results['Rrange prcnt']=[]
 results['RGy']=[]
 results['Rref']=[]
 results['Rdelta']=[]
+export_flag=False
+db_flag=False
 
 ### Generate GUI
 window = build_window()
@@ -320,6 +322,17 @@ while True:
         
     ### Button events
     if event == '-AnalyseS-': ### Analyse results
+        session = {}
+        results = {}
+        results['Rindex']=[]
+        results['ADate']=[]
+        results['Energy']=[]
+        results['R']=[]
+        results['Ravg']=[]
+        results['Rrange prcnt']=[]
+        results['RGy']=[]
+        results['Rref']=[]
+        results['Rdelta']=[]
         print('Analysing...')
         session_analysed=True
         try:
@@ -389,20 +402,22 @@ while True:
             sess_df.to_csv(csv_dir+os.sep+'session.csv', index=False)
             reslt_df.to_csv(csv_dir+os.sep+'result.csv', index=False)
             print('Exported.')
+            export_flag=True
         except:
             print('ERROR: Failed to export to csv!')
+            export_flag=False
 
     if event == '-Submit-': ### Submit data to database
         print('Contacting database...')
         try:
             db.write_to_db(sess_df,reslt_df)
             print('Results written to database.')
+            db_flag=True
+            window['ADate'].Update('')
+            values['ADate']=''
         except:
             print('ERROR: Failed write to database!')
-
-            
-    if event == '-Clear-': ### Clear GUI fields and results
-        print('Clear')
+            db_flag=False
 
     if event == sg.WIN_CLOSED or event == '-Cancel-': ### user closes window or clicks cancel
         print('Window closed')
@@ -499,10 +514,6 @@ while True:
                 window['diff'+str(i)]('',visible=False)
                 window['rang'+str(i)]('',visible=False)
             _=calc_metrics(str(i))
-    
-    # ### Update Comments
-    # if event == '-ML-' and values['-ML-']=='':
-    #     window['-ML-']('NA')
 
     ### Calculate average, diff, range and dose on the fly
     if event in ['r'+str(i)+str(j) for i,_ in enumerate(layers[0]) for j in range(1,6)] and \
