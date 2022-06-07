@@ -1,14 +1,14 @@
 import datetime
-import time
+#import time
 import os
-from turtle import color
+#from turtle import color
 import pandas as pd
 import numpy as np
 import PySimpleGUI as sg
 import database_df as db
 import re
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+#import matplotlib.pyplot as plt
+#from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 ### Dummy Data
 kq=1.001
@@ -261,7 +261,7 @@ def build_window():
 
     #buttons
     button_layout = [
-        [sg.B('Analyse Session', key='-AnalyseS-'),
+        [sg.B('Check Session', key='-AnalyseS-'),
          sg.B('Submit to Database', disabled=True, key='-Submit-'),
          sg.FolderBrowse('Export to CSV', key='-CSV_WRITE-', disabled=True, target='-Export-'), sg.In(key='-Export-', enable_events=True, visible=False),
          #sg.B('Clear', key='-Clear-'),
