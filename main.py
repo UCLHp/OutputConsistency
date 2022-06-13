@@ -1,14 +1,14 @@
 import datetime
-import time
+#import time
 import os
-from turtle import color
+#from turtle import color
 import pandas as pd
 import numpy as np
 import PySimpleGUI as sg
 import database_df as db
 import re
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+#import matplotlib.pyplot as plt
+#from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 ### Dummy Data
 kq=1.001
@@ -261,7 +261,7 @@ def build_window():
 
     #buttons
     button_layout = [
-        [sg.B('Analyse Session', key='-AnalyseS-'),
+        [sg.B('Check Session', key='-AnalyseS-'),
          sg.B('Submit to Database', disabled=True, key='-Submit-'),
          sg.FolderBrowse('Export to CSV', key='-CSV_WRITE-', disabled=True, target='-Export-'), sg.In(key='-Export-', enable_events=True, visible=False),
          #sg.B('Clear', key='-Clear-'),
@@ -355,6 +355,11 @@ while True:
         except:
             session_analysed = False
             print('ERROR: Session not analysed')
+        
+        if values['ADate']=='':
+            session_analysed=False
+            print('ERROR: Session not analysed - invalid date')
+            sg.popup("Session not analysed","Enter a valid date")
 
         if session_analysed:
             try:
@@ -380,7 +385,8 @@ while True:
                         results['Rdelta'].append(str(d_diff))
             except:
                 session_analysed = False
-                print('ERROR: Results not analysed')
+                print('ERROR: Results not analysed - check results')
+                sg.popup("Session not analysed","Check your results")
         
         if session_analysed:
             #activate buttons
@@ -411,7 +417,6 @@ while True:
         print('Contacting database...')
         try:
             db.write_to_db(sess_df,reslt_df)
-            print('Results written to database.')
             db_flag=True
             window['ADate'].Update('')
             values['ADate']=''
