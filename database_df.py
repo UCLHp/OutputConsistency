@@ -78,8 +78,8 @@ def read_db_data(fields):
     try:  
         conn = pypyodbc.connect(new_connection)                 
     except:
-        sg.popup("WARNING","Could not connect to database")
         print("Connection to table "+table+" failed...")
+        sg.popup("Could not connect to database","WARNING")
     if isinstance(conn,pypyodbc.Connection):
         if filter_var:
             sql = '''
@@ -170,9 +170,10 @@ def write_to_db(df_session,df_results):
         new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s'%(DB_PATH)   
 
     try:  
+        print('trying to connect')
         conn = pypyodbc.connect(new_connection)                 
     except:
-        sg.popup("Could not connect to database, nothing written","WARNING")
+        #sg.popup("Could not connect to database, nothing written","WARNING")
         print("Could not connect to database; nothing written")
     
     if isinstance(conn,pypyodbc.Connection):
