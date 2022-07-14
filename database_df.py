@@ -12,14 +12,14 @@ import pandas as pd
 
 SESSION_TABLE = "OutputConsSession"
 RESULTS_TABLE = "OutputConsResults"
-DB_PATH = None
-PASSWORD = None
+DB_PATH = "None"
+PASSWORD = "None"
 
 def populate_fields():
     print("Connecting to database...")
     connection_flag = True
     # baseline data needs updating
-    baseline_readings = [[5,10,14,20,25],[3,6,8.4,12,15]]
+    #baseline_readings = [[5,10,14,20,25],[3,6,8.4,12,15]]
     # gantry list
     G = ['Gantry 1', 'Gantry 2', 'Gantry 3', 'Gantry 4']
     # chamber type list
@@ -32,7 +32,7 @@ def populate_fields():
     fields = {'table': 'Operators', 'target': 'Initials', 'filter_var': None}
     Op = read_db_data(fields)
     if not Op:
-        Op = ['AB', 'AG', 'AGr', 'AJP', 'AK', 'AM', 'AT', 'AW', 'CB', 'CG', 'PI', 'RM', 'SC', 'SG', 'SavC', 'TNC', 'VMA', 'VR']
+        Op = ['AB', 'AG', 'AGr', 'AJP', 'AK', 'AM', 'AT', 'AW', 'CB', 'CG', 'LHC', 'PI', 'RM', 'SC', 'SG', 'SavC', 'TNC', 'VMA', 'VR']
         connection_flag = False
     Op.sort()
     # chamber list
@@ -55,7 +55,7 @@ def populate_fields():
         connection_flag = False
     if connection_flag:
         print("Connected...")
-    return G, Chtype, V, Rng, Op, Roos, Semiflex, Ch, El, baseline_readings
+    return G, Chtype, V, Rng, Op, Roos, Semiflex, Ch, El#, baseline_readings
 
 def read_db_data(fields):
     ''' Return field records from a table as a list'''
@@ -73,13 +73,15 @@ def read_db_data(fields):
         return None
     if PASSWORD:
         new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;PWD=%s'%(DB_PATH,PASSWORD) 
+        print("## CONNECTING TO: "+DB_PATH)
     else:
         new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s'%(DB_PATH)   
     try:  
-        conn = pypyodbc.connect(new_connection)                 
+        conn = pypyodbc.connect(new_connection)
+        print("## CONNECTED")                 
     except:
-        sg.popup("WARNING","Could not connect to database")
         print("Connection to table "+table+" failed...")
+        sg.popup("Could not connect to database","WARNING")
     if isinstance(conn,pypyodbc.Connection):
         if filter_var:
             sql = '''
@@ -89,7 +91,7 @@ def read_db_data(fields):
             sql = '''
                     SELECT %s FROM %s
                 '''%(target, table)
-
+        print("###\nSQL STATEMENT:\n"+sql+"\n###")
         cursor = conn.cursor()
         cursor.execute(sql)
         records = cursor.fetchall()
@@ -97,8 +99,11 @@ def read_db_data(fields):
         conn.commit()
         conn = None
         data = []
+        print("### RECORDS: "+str(records))
+        print("## Appending:")
         for row in records:
             data.append(row[0])
+            print("## "+str(row[0]))
         return data
     else:
         return None
@@ -170,9 +175,10 @@ def write_to_db(df_session,df_results):
         new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s'%(DB_PATH)   
 
     try:  
+        print('trying to connect')
         conn = pypyodbc.connect(new_connection)                 
     except:
-        sg.popup("Could not connect to database, nothing written","WARNING")
+        #sg.popup("Could not connect to database, nothing written","WARNING")
         print("Could not connect to database; nothing written")
     
     if isinstance(conn,pypyodbc.Connection):

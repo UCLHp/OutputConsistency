@@ -113,13 +113,12 @@ ref_data = {'Gantry 1': [0.620718228,
 
 ### Helper functions
 def calc_metrics(i):
-    r = [float(x) for x in [values['r'+i+'1'],values['r'+i+'2'],values['r'+i+'3'],values['r'+i+'4'],values['r'+i+'5']] if x!='']
+    r = [float(x) for x in [values['r'+i+'1'],values['r'+i+'2'],values['r'+i+'3'],values['r'+i+'4'],values['r'+i+'5']] if re.fullmatch(r'^(?:[-+]?[0-9]+(?:\.[0-9]*)?)$', x)]
     r_mean=None
     r_range=None
     d=None
     d_diff=None
     diff_color='lightgray'
-    print()
     if len(r)>0:
         # mean R
         r_mean = np.mean(r)
@@ -156,14 +155,89 @@ def calc_metrics(i):
         window['ad'+i]('')
 
 def pre_analysis_check(values):
-    check_fail = False
-    adate = values['ADate']
+    check_fail = [[False,0]]     
+    
+    # helper functions
+    def _range_check(value, key, minval, maxval):
+        if not maxval >= value >= minval:
+            sg.popup("Invalid Value", "Enter a valid "+key+" between "+str(minval)+" and "+str(maxval))
+            return True
+        else:
+            return False
+
+    # check ADate
     try:
         adate = datetime.datetime.strptime(values['ADate'],"%d/%m/%Y %H:%M:%S")
     except:
-        check_fail = True
-        sg.popup("Invalid Value", "Enter a valid value for: "+values['ADate'])
-        return False,1
+        sg.popup("Invalid Value", "Select a valid Date (dd/mm/yyyy hh:mm:ss)")
+        check_fail.append([True,1])
+        return check_fail
+
+    # check temperature
+    try:
+        check_flag = _range_check(float(values['Temp']), 'Temperature', 18., 26.)
+        if check_flag:
+            check_fail.append([check_flag,2])
+            return check_fail
+    except:
+        sg.popup("Invalid Value","Temperature error, check entered value")
+        check_fail.append([True,3])
+        return check_fail
+
+    # check pressure
+    try:
+        check_flag = _range_check(float(values['Press']), 'Pressure', 955, 1055)
+        if check_flag:
+            check_fail.append([check_flag,4])
+            return check_fail
+    except:
+        sg.popup("Invalid Value","Pressure error, check entered value")
+        check_fail.append([True,5])
+        return check_fail
+
+    # check gantry angle
+    try:
+        if not 0 <= int(values['GA']) <= 359:
+            sg.popup("Invalid Value","Enter an integer gantry angle between 0 and 359")
+            check_fail.append([True,6])
+            return check_fail
+    except:
+        sg.popup("Invalid Value","Gantry angle error, check entered value")
+        check_fail.append([True,7])
+        return check_fail
+    
+    # check readings are deimcal or blank
+    r = []
+    try:
+        for n,_ in enumerate(layers[0]):
+            i = str(n)
+            lst = [values['r'+i+'1'],values['r'+i+'2'],values['r'+i+'3'],values['r'+i+'4'],values['r'+i+'5']]
+            r.extend([x for x in lst if not re.fullmatch(r'^(?:[0-9]+(?:\.[0-9]*)?)?$', x)])
+        if len(r)!=0:
+           sg.popup("Invalid Value","Ensure all readings are positive decimal numbers")
+           check_fail.append([True,8])
+           return check_fail
+    except:
+        sg.popup("Invalid Value","R error, check entered values")
+        check_fail.append([True,9])
+        return check_fail
+    
+    # check operator
+    if values['-Op1-'] == '':
+        check_fail.append([True,10])
+        sg.popup("Invalid Value", "Select Operator 1 initials")
+        return check_fail
+    
+    # check gantry, chamber, electrometer, voltage
+    equipment = {'Gantry':'-G-','Chamber':'-Ch-','Electrometer':'-El-','Voltage':'-V-'}
+    for n in equipment:
+        if values[equipment[n]] == '':
+            check_fail.append([True,11])
+            sg.popup("Invalid Value", "Select a value for: "+n)
+            return check_fail
+    
+    return check_fail
+        
 
 ### GUI window function
 def build_window():
@@ -178,13 +252,13 @@ def build_window():
     ]
     sess1_layout = [
         [sg.T('Operator 1', justification='right', size=(13,1)), sg.DD(['']+Op, size=(8,1), key='-Op1-', readonly=True)],
-        [sg.T('Operator 2', justification='right', size=(13,1)), sg.DD(['','Op1 only']+Op, size=(8,1), key='-Op2-', readonly=True)],
+        [sg.T('Operator 2', justification='right', size=(13,1)), sg.DD(['']+Op, size=(8,1), key='-Op2-', readonly=True)],
     ]
 
     #calibration
     cal0_layout = [
-        [sg.T('Temp', justification='right', size=(8,1)), sg.Input(key='Temp', enable_events=True, size=(6,1))],
-        [sg.T('Pressure', justification='right', size=(8,1)), sg.Input(key='Press', enable_events=True, size=(6,1))],
+        [sg.T('T (C)', justification='right', size=(8,1)), sg.Input(key='Temp', enable_events=True, size=(6,1))],
+        [sg.T('P (hPa)', justification='right', size=(8,1)), sg.Input(key='Press', enable_events=True, size=(6,1))],
         [sg.T('TPC', justification='right', size=(8,1)), sg.T(key='tpc', size=(6,1), background_color='lightgray', text_color='black', justification='right')],
     ]
     cal1_layout = [
@@ -201,7 +275,7 @@ def build_window():
     #equipment
     eq0_layout = [
         [sg.T('Gantry', justification='right', size=(12,1)), sg.DD(G, size=(11,1), enable_events=True, key='-G-', readonly=True)],
-        [sg.T('Gantry Angle', justification='right', size=(12,1)), sg.Input(key='GA', enable_events=True, default_text='0', size=(11,1))],
+        [sg.T('GA (deg)', justification='right', size=(12,1)), sg.Input(key='GA', enable_events=True, default_text='0', size=(11,1))],
     ]
     eq1_layout = [
         [sg.T('Chamber Type', justification='right', size=(12,1)), sg.DD(Chtype, size=(11,1), default_value='Roos', enable_events=True, key='-Chtype-', readonly=True)],
@@ -292,11 +366,6 @@ results['Rindex']=[]
 results['ADate']=[]
 results['Energy']=[]
 results['R']=[]
-#results['R1']=[]
-#results['R2']=[]
-#results['R3']=[]
-#results['R4']=[]
-#results['R5']=[]
 results['Ravg']=[]
 results['Rrange prcnt']=[]
 results['RGy']=[]
@@ -335,28 +404,34 @@ while True:
         results['Rdelta']=[]
         print('Analysing...')
         session_analysed=True
-        try:
-            session['Adate']=[values['ADate']]
-            session['Op1']=[values['-Op1-']]
-            session['Op2']=[values['-Op2-']]
-            session['T']=[values['Temp']]
-            session['P']=[values['Press']]
-            session['Electrometer']=[values['-El-']]
-            session['V']=[values['-V-']]
-            session['GA']=[values['GA']]
-            session['Chamber']=[values['-Ch-']]
-            session['kQ']=[window['kq'].get()]
-            session['ks']=[window['ks'].get()]
-            session['kelec']=[window['kelec'].get()]
-            session['kpol']=[window['kpol'].get()]
-            session['NDW']=[window['ndw'].get()]
-            session['TPC']=[str(tpc)]
-            session['Comments']=[values['-ML-']]
-        except:
+        anal_flag = pre_analysis_check(values)
+        if anal_flag[-1][0]:
             session_analysed = False
-            print('ERROR: Session not analysed')
+            print('ERROR: Session not analysed - check all information is entered correctly (Err Code: '+str(anal_flag[-1])+')')
+        if session_analysed:
+            try:
+                session['Adate']=[values['ADate']]
+                session['Op1']=[values['-Op1-']]
+                session['Op2']=[values['-Op2-']]
+                session['T']=[values['Temp']]
+                session['P']=[values['Press']]
+                session['Electrometer']=[values['-El-']]
+                session['V']=[values['-V-']]
+                session['GA']=[values['GA']]
+                session['Chamber']=[values['-Ch-']]
+                session['kQ']=[window['kq'].get()]
+                session['ks']=[window['ks'].get()]
+                session['kelec']=[window['kelec'].get()]
+                session['kpol']=[window['kpol'].get()]
+                session['NDW']=[window['ndw'].get()]
+                session['TPC']=[str(tpc)]
+                session['Comments']=[values['-ML-']]
+            except:
+                session_analysed = False
+                print('ERROR: Session not analysed - check session data is complete')
 
         if session_analysed:
+            print(2)
             try:
                 refs = [ref_data[values['-G-']],ref_data['Energy']]
                 for i,_ in enumerate(layers[0]):
@@ -368,11 +443,6 @@ while True:
                         results['ADate'].append(values['ADate'])
                         results['Energy'].append(window['E'+str(i)].get())
                         results['R'].append([ window['r'+str(i)+str(j)].get() for j in range(1,6) if window['r'+str(i)+str(j)].get() !=''  ])
-                        #results['R1'].append(window['r'+str(i)+'1'].get())
-                        #results['R2'].append(window['r'+str(i)+'2'].get())
-                        #results['R3'].append(window['r'+str(i)+'3'].get())
-                        #results['R4'].append(window['r'+str(i)+'4'].get())
-                        #results['R5'].append(window['r'+str(i)+'5'].get())
                         results['Ravg'].append(str(r_mean))
                         results['Rrange prcnt'].append(str(r_range))
                         results['RGy'].append(str(d))
@@ -380,8 +450,15 @@ while True:
                         results['Rdelta'].append(str(d_diff))
             except:
                 session_analysed = False
-                print('ERROR: Results not analysed')
+                print('ERROR: Results not analysed - check all information is entered correctly')
+                sg.popup("Session not analysed","Check you have entered all information correctly")
         
+        if len(results['R'])==0 and session_analysed:
+            print(3)
+            session_analysed = False
+            print('ERROR: Results not analysed - check measurements')
+            sg.popup("No Results","Enter some results before clicking Check Session")
+
         if session_analysed:
             #activate buttons
             window['-CSV_WRITE-'](disabled=False)
@@ -411,7 +488,6 @@ while True:
         print('Contacting database...')
         try:
             db.write_to_db(sess_df,reslt_df)
-            print('Results written to database.')
             db_flag=True
             window['ADate'].Update('')
             values['ADate']=''
