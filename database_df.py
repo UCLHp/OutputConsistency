@@ -19,7 +19,7 @@ def populate_fields():
     print("Connecting to database...")
     connection_flag = True
     # baseline data needs updating
-    #baseline_readings = [[5,10,14,20,25],[3,6,8.4,12,15]]
+    baseline_readings = [[5,10,14,20,25],[3,6,8.4,12,15]]
     # gantry list
     G = ['Gantry 1', 'Gantry 2', 'Gantry 3', 'Gantry 4']
     # chamber type list
@@ -55,7 +55,7 @@ def populate_fields():
         connection_flag = False
     if connection_flag:
         print("Connected...")
-    return G, Chtype, V, Rng, Op, Roos, Semiflex, Ch, El#, baseline_readings
+    return G, Chtype, V, Rng, Op, Roos, Semiflex, Ch, El, baseline_readings
 
 def read_db_data(fields):
     ''' Return field records from a table as a list'''
