@@ -10,7 +10,10 @@ import re
 #import matplotlib.pyplot as plt
 #from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-### Dummy Data
+### import data from database
+Op, Roos, Semiflex, El = db.populate_fields()
+
+### Calibration data. kpol, ndw, kelec will update from database when date is selected
 kq=1.001
 ks={'Gantry 1': 1.003, 'Gantry 2': 1.003, 'Gantry 3': 1.003, 'Gantry 4': 1.003}
 selected_ks=None
@@ -21,95 +24,16 @@ selected_kelec=None
 ndw={'3126': 84800000, '3128': 83790123, '3131': 83300000, '3132': 83700000, '142438': 584400000, '142586': 582619547, '142587': 585969341}
 selected_ndw=None
 rbe=1.1
+# dropdown data
 G = ['Gantry 1', 'Gantry 2', 'Gantry 3', 'Gantry 4']
 Chtype = ['Roos', 'Semiflex']
 V = [-400,-200,0,200,400]
 Rng = ['Low','Medium','High']
-Op = ['AB', 'AG', 'AGr', 'AJP', 'AK', 'AM', 'AT', 'AW', 'CB', 'CG', 'PI', 'RM', 'SC', 'SG', 'SavC', 'TNC', 'VMA', 'VR']
-Roos = ['3126', '3128', '3131', '3132']
-Semiflex = ['142438', '142586', '142587']
-El = ['92579', '92580', '92581']
 Ch = Roos
 en_layers = ['18', '5','1']
 layers = [list(range(240,69,-10)),[240,200,150,100,70],list(range(160,159,-10))]
-ref_data = {'Gantry 1': [0.620718228,
-                         0.619059209,
-                         0.617768717,
-                         0.61630847,
-                         0.615439241,
-                         0.614602406,
-                         0.614421569,
-                         0.61490591,
-                         0.615431268,
-                         0.616722873,
-                         0.619577735,
-                         0.624850115,
-                         0.631355221,
-                         0.641942175,
-                         0.655949409,
-                         0.678704785,
-                         0.715224341,
-                         0.787287874],
-            'Gantry 2': [0.621569268,
-                         0.619468228,
-                         0.618494906,
-                         0.617508932,
-                         0.616833655,
-                         0.616431304,
-                         0.616334368,
-                         0.617078349,
-                         0.618259004,
-                         0.620397707,
-                         0.623570501,
-                         0.628771352,
-                         0.635865102,
-                         0.646086462,
-                         0.660623183,
-                         0.683335863,
-                         0.72139482,
-                         0.793952161],
-            'Gantry 3': [0.619880364,
-                         0.618135322,
-                         0.617211938,
-                         0.615995801,
-                         0.615139689,
-                         0.614511372,
-                         0.614366679,
-                         0.614791964,
-                         0.615707426,
-                         0.617600276,
-                         0.620708289,
-                         0.625251093,
-                         0.632031413,
-                         0.642004496,
-                         0.656584774,
-                         0.679376708,
-                         0.716366329,
-                         0.788056794],
-            'Gantry 4': [0.620718228,
-                         0.619059209,
-                         0.617768717,
-                         0.61630847,
-                         0.615439241,
-                         0.614602406,
-                         0.614421569,
-                         0.61490591,
-                         0.615431268,
-                         0.616722873,
-                         0.619577735,
-                         0.624850115,
-                         0.631355221,
-                         0.641942175,
-                         0.655949409,
-                         0.678704785,
-                         0.715224341,
-                         0.787287874],
-            'Energy': list(range(240,69,-10))}
-
-
-### Session and Results Classes
-
-# Pull inital data from DB
+# Gantry specific reference data from database
+ref_data = db.update_ref()
 
 ### Helper functions
 def calc_metrics(i):
@@ -246,7 +170,7 @@ def build_window():
 
     #equipment
     sess0_layout = [
-        [sg.T('Date', justification='right', size=(5,1)), sg.Input(key='ADate', size=(18,1), readonly=True)],
+        [sg.T('Date', justification='right', size=(5,1)), sg.Input(key='ADate', enable_events=True, size=(18,1), readonly=True)],
         [sg.T('', size=(5,1)), sg.CalendarButton('dd/mm/yyyy hh:mm:ss', font=('size',9), target='ADate',format='%d/%m/%Y %H:%M:%S', close_when_date_chosen=True, no_titlebar=False, key='-CalB-')],
         [sg.T('Energy Layers', justification='right', size=(12,1)), sg.DD(en_layers, enable_events=True, default_value='18', size=(8,1), key='-Layers-', readonly=True)],
     ]
@@ -589,6 +513,39 @@ while True:
                 window['ad'+str(i)]('',visible=False)
                 window['diff'+str(i)]('',visible=False)
                 window['rang'+str(i)]('',visible=False)
+            _=calc_metrics(str(i))
+
+    ### Update calibration factors
+    if event == 'ADate':
+        kpol, ndw, kelec = db.update_cal(values['ADate'],Roos,Semiflex,El)
+        
+        if values['-Chtype-'] == 'Roos':
+            Ch = Roos
+        elif values['-Chtype-'] == 'Semiflex':
+            Ch = Semiflex
+        else:
+            Ch = []
+        window['-Ch-'].update(values=Ch, value='') # update Ch combo box
+
+        if values['-El-'] in El:
+            selected_kelec=kelec[values['-El-']]
+            window['kelec'](str(selected_kelec)) 
+        else:
+            window['kelec']('') 
+        for i,_ in enumerate(layers[0]):
+            _=calc_metrics(str(i))
+
+        if values['-Ch-'] in Ch:
+            selected_ndw = ndw[values['-Ch-']]
+            selected_kpol = kpol[values['-Ch-']]
+            window['kq'](str(kq)) 
+            window['kpol'](str(selected_kpol))
+            window['ndw'](str(selected_ndw)) 
+        else:
+            window['kq']('') 
+            window['kpol']('')
+            window['ndw']('') 
+        for i,_ in enumerate(layers[0]):
             _=calc_metrics(str(i))
 
     ### Calculate average, diff, range and dose on the fly

@@ -12,50 +12,125 @@ import pandas as pd
 
 SESSION_TABLE = "OutputConsSession"
 RESULTS_TABLE = "OutputConsResults"
-DB_PATH = "None"
-PASSWORD = "None"
+DB_PATH = "\\\\9.40.120.20\\rtassetBE\\AssetsDatabase_be.accdb"
+PASSWORD = "JoNiSi"
 
 def populate_fields():
+    '''
+        Populate dropdown boxes from database
+    '''
     print("Connecting to database...")
     connection_flag = True
-    # baseline data needs updating
-    baseline_readings = [[5,10,14,20,25],[3,6,8.4,12,15]]
-    # gantry list
-    G = ['Gantry 1', 'Gantry 2', 'Gantry 3', 'Gantry 4']
-    # chamber type list
-    Chtype = ['Roos', 'Semiflex']
-    # voltage list
-    V = [-400,-200,0,200,400]
-    # electrometer range list
-    Rng = ['Low','Medium','High']
-    # operator list
     fields = {'table': 'Operators', 'target': 'Initials', 'filter_var': None}
     Op = read_db_data(fields)
     if not Op:
+        print("Oops Op")
         Op = ['AB', 'AG', 'AGr', 'AJP', 'AK', 'AM', 'AT', 'AW', 'CB', 'CG', 'LHC', 'PI', 'RM', 'SC', 'SG', 'SavC', 'TNC', 'VMA', 'VR']
         connection_flag = False
     Op.sort()
     # chamber list
     fields = {'table': 'Assets', 'target': "[Serial Number]", 'filter_var': "Model", 'filter_val': 'TW34001SC'}
     Roos = read_db_data(fields)
+    Roos = [str(int(i)) for i in Roos]
     if not Roos:
+        print("Oops Roos")
         Roos = ['003126', '003128', '003131', '003132']
         connection_flag = False
     fields['filter_val'] = 'TW31021'
     Semiflex = read_db_data(fields)
     if not Semiflex:
+        print("Oops Semiflex")
         Semiflex = ['142438', '142586', '142587']
         connection_flag = False
-    Ch = []
     # electrometer list
     fields['filter_val'] = 'UnidosE'
     El = read_db_data(fields)
     if not El:
+        print("Oops El")
         El = ['92579', '92580', '92581']
         connection_flag = False
     if connection_flag:
         print("Connected...")
-    return G, Chtype, V, Rng, Op, Roos, Semiflex, Ch, El, baseline_readings
+    return Op, Roos, Semiflex, El
+
+def update_ref():
+    # instantiate reference data
+    e_lst = list(range(240,69,-10))
+    ref_data = {'Energy': e_lst,
+        'Gantry 1': [0]*len(e_lst),
+        'Gantry 2': [0]*len(e_lst),
+        'Gantry 3': [0]*len(e_lst),
+        'Gantry 4': [0]*len(e_lst),
+        }
+    # retrieve reference from DB
+    fields = {
+        'target': "Energy, [Gantry 1], [Gantry 2], [Gantry 3], [Gantry 4]",
+        'table': "OutputConsRef",
+        'filter_var': None,
+    }
+    records = read_db_data(fields)
+    #write to dict
+    for row in records:
+        en = int(row[0])
+        if en in e_lst:
+            idx = e_lst.index(en)
+            ref_data['Gantry 1'][idx]=row[1]
+            ref_data['Gantry 2'][idx]=row[2]
+            ref_data['Gantry 3'][idx]=row[3]
+            ref_data['Gantry 4'][idx]=row[4]
+    return ref_data
+
+def update_cal(Adate,roos,semiflex,elect):
+    '''
+        Update calibration factors from database
+    '''
+    # concatenate all serial numbers
+    roos = [str(int(i)) for i in roos]
+    ch_numbers = roos + semiflex
+
+    # instantiate cal factor dicts
+    kpol = {}
+    ndw = {}
+    kelec = {}
+    if Adate=='':
+        sg.popup("Date required","Please enter a date to retrieve the latest calibration factors.")
+        return False
+    else:
+        # reformat date
+        d = Adate[0:2]
+        m = Adate[3:5]
+        y = Adate[6:10]
+        #query_date = y+'-'+m+'-'+d
+        query_date = "'%s-%s-%s'"%(y,m,d)
+        # query database for most recent calibration factors
+        sql = '''SELECT CQ2.*, Assets.Category \
+            FROM Assets INNER JOIN \
+            (SELECT Calibration.Equipment, Calibration.[CalFactor], Calibration.Kpol, Calibration.[Cal Date] \
+            FROM (SELECT A.[Equipment], Max(A.[Cal Date]) AS [MaxOfCal Date] \
+            FROM Calibration AS A WHERE A.[Cal Date] <= CDate(%s) \
+            GROUP BY A.[Equipment])  AS CQ1 INNER JOIN Calibration \
+            ON (CQ1.[MaxOfCal Date] = Calibration.[Cal Date]) AND (CQ1.Equipment = Calibration.Equipment) \
+            WHERE ((Calibration.Operator) Is Not Null))  AS CQ2 ON Assets.Item = CQ2.Equipment;'''%(query_date)
+        new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;PWD=%s'%(DB_PATH,PASSWORD) 
+        conn = pypyodbc.connect(new_connection)  
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        records = cursor.fetchall()
+        cursor.close()
+        conn.commit()
+        conn = None
+        # cal factors to dicts
+        for k in records:
+            for x in ch_numbers:
+                if "["+x+"]" in k[0]:
+                    ndw[x]=int(k[1])
+                    kpol[x]=int(k[2])
+            for y in elect:
+                if "["+y+"]" in k[0]:
+                    kelec[y]=int(k[1])
+
+        return kpol, ndw, kelec
+
 
 def read_db_data(fields):
     ''' Return field records from a table as a list'''
@@ -73,12 +148,10 @@ def read_db_data(fields):
         return None
     if PASSWORD:
         new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;PWD=%s'%(DB_PATH,PASSWORD) 
-        print("## CONNECTING TO: "+DB_PATH)
     else:
         new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s'%(DB_PATH)   
     try:  
-        conn = pypyodbc.connect(new_connection)
-        print("## CONNECTED")                 
+        conn = pypyodbc.connect(new_connection)               
     except:
         print("Connection to table "+table+" failed...")
         sg.popup("Could not connect to database","WARNING")
@@ -91,7 +164,6 @@ def read_db_data(fields):
             sql = '''
                     SELECT %s FROM %s
                 '''%(target, table)
-        print("###\nSQL STATEMENT:\n"+sql+"\n###")
         cursor = conn.cursor()
         cursor.execute(sql)
         records = cursor.fetchall()
@@ -99,11 +171,11 @@ def read_db_data(fields):
         conn.commit()
         conn = None
         data = []
-        print("### RECORDS: "+str(records))
-        print("## Appending:")
         for row in records:
-            data.append(row[0])
-            print("## "+str(row[0]))
+            if len(row)==1:
+                data.append(row[0])
+            else:
+                data.append(list(row))
         return data
     else:
         return None
