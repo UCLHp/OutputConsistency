@@ -11,6 +11,6 @@ run example:
 * Check Session  
 * Submit to Database or Export to CSV  
 * If any changes are made to the form, Check Session again  
-* End Session of close window  
+* End Session or close window  
 
 
