@@ -300,12 +300,26 @@ db_flag=False
 
 ### Generate GUI
 window = build_window()
-window.bind('<Configure>', "Configure")
+#window.bind('<Configure>', "Configure")
+    
+window.bind('<Down>', '-NEXT-')
+window.bind('<Up>', '-PREV-')
 
 # Event Loop listens out for events e.g. button presses
 while True:
     event, values = window.read()
-    ### handle resize events
+
+    if event == sg.WIN_CLOSED or event == 'Exit' or event == '-Cancel-': ### user closes window or clicks cancel
+        print('Window closed')
+        break
+
+    ### handle arrow key events
+    if event == '-NEXT-':
+        next_element = window.find_element_with_focus().get_next_focus()
+        next_element.set_focus()
+    if event == '-PREV-':
+        prev_element = window.find_element_with_focus().get_previous_focus()
+        prev_element.set_focus()
 
     ### reset analysed flag if there is just about any event
     if event not in ['-Submit-','-AnalyseS-','-Export-','-ML-',sg.WIN_CLOSED]:
@@ -416,10 +430,6 @@ while True:
         except:
             print('ERROR: Failed write to database!')
             db_flag=False
-
-    if event == sg.WIN_CLOSED or event == '-Cancel-': ### user closes window or clicks cancel
-        print('Window closed')
-        break
 
     ### Populate Chamber ID list
     if event == '-Chtype-':   # chamber type dictates chamber list
