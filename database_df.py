@@ -12,8 +12,8 @@ import pandas as pd
 
 SESSION_TABLE = "OutputConsSession"
 RESULTS_TABLE = "OutputConsResults"
-DB_PATH = "\\\\9.40.120.20\\rtassetBE\\AssetsDatabase_be.accdb"
-PASSWORD = "JoNiSi"
+DB_PATH = ""
+PASSWORD = ""
 
 def populate_fields():
     '''
