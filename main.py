@@ -37,7 +37,7 @@ ref_data = db.update_ref()
 
 ### Helper functions
 def calc_metrics(i):
-    r = [float(x) for x in [values['r'+i+'1'],values['r'+i+'2'],values['r'+i+'3'],values['r'+i+'4'],values['r'+i+'5']] if re.fullmatch(r'^(?:[-+]?[0-9]+(?:\.[0-9]*)?)$', x)]
+    r = [float(x) for x in [values['r'+i+'1'],values['r'+i+'2'],values['r'+i+'3'],values['r'+i+'4'],values['r'+i+'5']] if re.fullmatch(r'^(?:[0-9]+(?:\.[0-9]*)?)$', x)]
     r_mean=None
     r_range=None
     d=None
@@ -355,7 +355,6 @@ while True:
                 print('ERROR: Session not analysed - check session data is complete')
 
         if session_analysed:
-            print(2)
             try:
                 refs = [ref_data[values['-G-']],ref_data['Energy']]
                 for i,_ in enumerate(layers[0]):
@@ -378,7 +377,6 @@ while True:
                 sg.popup("Session not analysed","Check you have entered all information correctly")
         
         if len(results['R'])==0 and session_analysed:
-            print(3)
             session_analysed = False
             print('ERROR: Results not analysed - check measurements')
             sg.popup("No Results","Enter some results before clicking Check Session")
