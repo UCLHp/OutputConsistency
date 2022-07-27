@@ -13,7 +13,7 @@ import re
 ### import data from database
 Op, Roos, Semiflex, El = db.populate_fields()
 
-### Calibration data. kpol, ndw, kelec will update from database when date is selected
+### Calibration data (kpol, ndw, kelec will update from database when Adate is generated)
 kq=1.001
 ks={'Gantry 1': 1.003, 'Gantry 2': 1.003, 'Gantry 3': 1.003, 'Gantry 4': 1.003}
 selected_ks=None
@@ -24,7 +24,7 @@ selected_kelec=None
 ndw={'3126': 84800000, '3128': 83790123, '3131': 83300000, '3132': 83700000, '142438': 584400000, '142586': 582619547, '142587': 585969341}
 selected_ndw=None
 rbe=1.1
-# dropdown data
+# dropdown list data
 G = ['Gantry 1', 'Gantry 2', 'Gantry 3', 'Gantry 4']
 Chtype = ['Roos', 'Semiflex']
 V = [-400,-200,0,200,400]
@@ -37,10 +37,22 @@ ref_data = db.update_ref()
 
 ### Helper functions
 def calc_metrics(i):
+    '''
+        Calculate mean dose from readings for energy layer i and update GUI display
+        Input:
+            i           int index of energy layer in GUI
+        Return:
+            r_mean      mean reading
+            r_range     range betwen reading max-min
+            d_mean      mean dose
+            d_diff      percentage difference between mean reference dose values
+            d           list of calculated dose values
+    '''
     r = [float(x) for x in [values['r'+i+'1'],values['r'+i+'2'],values['r'+i+'3'],values['r'+i+'4'],values['r'+i+'5']] if re.fullmatch(r'^(?:[0-9]+(?:\.[0-9]*)?)$', x)]
     r_mean=None
     r_range=None
-    d=None
+    d = []
+    d_mean=None
     d_diff=None
     diff_color='lightgray'
     if len(r)>0:
@@ -48,7 +60,8 @@ def calc_metrics(i):
         r_mean = np.mean(r)
         window['rm'+i]('%.4f' % r_mean)
         # R range
-        r_range = (max(r)-min(r)) / r_mean * 100
+        eps = np.finfo(float).eps # remove risk of dividing by zero
+        r_range = (max(r)-min(r)) / (r_mean+eps) * 100
         window['rang'+i]('%.2f' % r_range)
         if len(window['rr'+i].get())>0:
             energy = int(window['E'+i].get())
@@ -56,10 +69,16 @@ def calc_metrics(i):
             dref = ref_data[values['-G-']][idx]
             # Dose measured
             try:
-                d = r_mean*tpc*float(selected_ndw)*float(kq)*float(selected_ks)*float(selected_kelec)*float(selected_kpol)*float(rbe)*1e-9
-                window['ad'+i]('%.4f' % d)
+                dose_coeff = tpc*float(selected_ndw)*float(kq)*float(selected_ks)*float(selected_kelec)*float(selected_kpol)*float(rbe)*1e-9
+                # calc dose for each reading
+                for reading in r:
+                    d.append(reading*dose_coeff)
+                # mean dose
+                d_mean = np.mean(d)
+                window['ad'+i]('%.4f' % d_mean)
                 # Dose diff
-                d_diff = (d - dref)/dref*100
+                d_diff = (d_mean - dref)/dref*100
+                # Conditional formatting
                 if abs(d_diff)>=2.0:
                     diff_color='red'
                 elif abs(d_diff)>=0.5:
@@ -71,7 +90,7 @@ def calc_metrics(i):
                 window['ad'+i]('')
                 window['diff'+i]('', background_color=diff_color, text_color='black')
         
-        return r_mean, r_range, d, d_diff
+        return r_mean, r_range, d_mean, d_diff, d, r
     else:
         window['rm'+i]('')
         window['rang'+i]('')
@@ -79,6 +98,15 @@ def calc_metrics(i):
         window['ad'+i]('')
 
 def pre_analysis_check(values):
+    '''
+        Check GUI values are valid
+        Input:
+            values                  GUI values dict
+
+        Returns list of lists check_fail:
+            check_fail[n][0]       True if check n failed
+            check_fail[n][1]       unique int for check n
+    '''
     check_fail = [[False,0]]     
     
     # helper functions
@@ -165,6 +193,10 @@ def pre_analysis_check(values):
 
 ### GUI window function
 def build_window():
+    '''
+        Create the GUI layout
+        Returns PySimpleGUI window object
+    '''
     #theme
     sg.theme('DefaultNoMoreNagging')
 
@@ -278,10 +310,10 @@ def build_window():
     ]
 
     icon_file = os.path.abspath(os.path.join(os.path.dirname(__file__), 'icon', 'strawberry_icon.ico'))
-    return sg.Window('Output Consistency', layout, resizable=True, finalize=True, icon=icon_file)
+    return sg.Window('Output Consistency', layout, resizable=True, finalize=True, return_keyboard_events=True, icon=icon_file)
 
 
-### Initialise output data
+### Initialise output data dict
 tpc=None
 session_analysed = False
 session = {}
@@ -293,6 +325,7 @@ results['R']=[]
 results['Ravg']=[]
 results['Rrange prcnt']=[]
 results['RGy']=[]
+results['RavgGy']=[]
 results['Rref']=[]
 results['Rdelta']=[]
 export_flag=False
@@ -300,8 +333,8 @@ db_flag=False
 
 ### Generate GUI
 window = build_window()
-#window.bind('<Configure>', "Configure")
-    
+# bind keyboard presses to moving the active field in GUI (up, down, enter)
+window.bind('<Return>', '-NEXTE-') 
 window.bind('<Down>', '-NEXT-')
 window.bind('<Up>', '-PREV-')
 
@@ -313,21 +346,27 @@ while True:
         print('Window closed')
         break
 
-    ### handle arrow key events
+    ### handle keyboard events
     if event == '-NEXT-':
         next_element = window.find_element_with_focus().get_next_focus()
         next_element.set_focus()
+    if event == '-NEXTE-':
+        try:
+            next_element = window.find_element_with_focus().get_next_focus()
+            next_element.set_focus()
+        except:
+            "pass"
     if event == '-PREV-':
         prev_element = window.find_element_with_focus().get_previous_focus()
         prev_element.set_focus()
 
     ### reset analysed flag if there is just about any event
-    if event not in ['-Submit-','-AnalyseS-','-Export-','-ML-',sg.WIN_CLOSED]:
+    if event not in ['-Submit-','-AnalyseS-','-Export-','-ML-','-NEXT-','-NEXTE-','-PREV-',sg.WIN_CLOSED]:
         session_analysed=False
         window['-CSV_WRITE-'](disabled=True) # disable csv export button
         window['-Submit-'](disabled=True) # disable access export button
         
-    ### Button events
+    ### Button event actions
     if event == '-AnalyseS-': ### Analyse results
         session = {}
         results = {}
@@ -338,6 +377,7 @@ while True:
         results['Ravg']=[]
         results['Rrange prcnt']=[]
         results['RGy']=[]
+        results['RavgGy']=[]
         results['Rref']=[]
         results['Rdelta']=[]
         print('Analysing...')
@@ -351,10 +391,11 @@ while True:
                 session['Adate']=[values['ADate']]
                 session['Op1']=[values['-Op1-']]
                 session['Op2']=[values['-Op2-']]
-                session['T']=[values['Temp']]
+                session['Temp']=[values['Temp']]
                 session['P']=[values['Press']]
                 session['Electrometer']=[values['-El-']]
                 session['V']=[values['-V-']]
+                session['Gantry']=[values['-G-']]
                 session['GA']=[values['GA']]
                 session['Chamber']=[values['-Ch-']]
                 session['kQ']=[window['kq'].get()]
@@ -371,20 +412,23 @@ while True:
         if session_analysed:
             try:
                 refs = [ref_data[values['-G-']],ref_data['Energy']]
+                tstamp = values['ADate']
                 for i,_ in enumerate(layers[0]):
                     if window['diff'+str(i)].get() != '':
                         en = int(window['E'+str(i)].get())
                         idx = refs[1].index(en)
-                        r_mean, r_range, d, d_diff=calc_metrics(str(i))
-                        results['Rindex'].append(values['ADate']+"_%02d" % i)
-                        results['ADate'].append(values['ADate'])
-                        results['Energy'].append(window['E'+str(i)].get())
-                        results['R'].append([ window['r'+str(i)+str(j)].get() for j in range(1,6) if window['r'+str(i)+str(j)].get() !=''  ])
-                        results['Ravg'].append(str(r_mean))
-                        results['Rrange prcnt'].append(str(r_range))
-                        results['RGy'].append(str(d))
-                        results['Rref'].append(str(refs[0][idx]))
-                        results['Rdelta'].append(str(d_diff))
+                        r_mean, r_range, d_mean, d_diff, d, r = calc_metrics(str(i))
+                        for j, (rn, dn) in enumerate(zip(r,d)):
+                            results['Rindex'].append(re.sub('\ |\/|\:','',tstamp)+"_%02d_%01d"%(i,j))
+                            results['ADate'].append(values['ADate'])
+                            results['Energy'].append(window['E'+str(i)].get())
+                            results['R'].append(str(rn))
+                            results['Ravg'].append(str(r_mean))
+                            results['Rrange prcnt'].append(str(r_range))
+                            results['RGy'].append(str(dn))
+                            results['RavgGy'].append(str(d_mean))
+                            results['Rref'].append(str(refs[0][idx]))
+                            results['Rdelta'].append(str(d_diff))
             except:
                 session_analysed = False
                 print('ERROR: Results not analysed - check all information is entered correctly')
@@ -401,12 +445,19 @@ while True:
             window['-Submit-'](disabled=False)
             # convert session and results to dataframes
             sess_df = pd.DataFrame.from_dict(session)
-            reslt_df = pd.DataFrame.from_dict(results)
+            reslt_df = pd.DataFrame.from_dict(
+                {k: results[k] for k in results.keys() & {'Rindex', 'ADate', 'Energy', 'R', 'RGy'}}
+                )
             print('Results analysed.')
+        else:
+            #deactivate buttons
+            window['-CSV_WRITE-'](disabled=True)
+            window['-Submit-'](disabled=True)
 
                 
     if event == '-Export-': ### Export results to csv
         print('Exporting to csv...')
+        export_flag=False
         try:
             # create timestamped folder
             csv_time = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -418,18 +469,29 @@ while True:
             export_flag=True
         except:
             print('ERROR: Failed to export to csv!')
-            export_flag=False
+        if export_flag:
+            #deactivate buttons
+            window['-Submit-'](disabled=False)
+        else:
+            window['-Submit-'](disabled=True)
+
 
     if event == '-Submit-': ### Submit data to database
         print('Contacting database...')
+        db_flag=False
         try:
             db.write_to_db(sess_df,reslt_df)
             db_flag=True
-            window['ADate'].Update('')
-            values['ADate']=''
         except:
             print('ERROR: Failed write to database!')
-            db_flag=False
+        if db_flag:
+            #deactivate buttons
+            window['-Submit-'](disabled=True)
+            window['ADate'].Update('')
+            values['ADate']=''
+        else:
+            window['-CSV_WRITE-'](disabled=True)
+            window['-Submit-'](disabled=True)
 
     ### Populate Chamber ID list
     if event == '-Chtype-':   # chamber type dictates chamber list
@@ -561,8 +623,3 @@ while True:
         (re.match('[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)', values[event]) or values[event]==''):      
         i = event[1:-1]
         _ = calc_metrics(i)
-
-
-
-
-

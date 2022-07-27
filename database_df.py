@@ -12,15 +12,21 @@ import pandas as pd
 
 SESSION_TABLE = "OutputConsSession"
 RESULTS_TABLE = "OutputConsResults"
-DB_PATH = ""
-PASSWORD = ""
+DB_PATH = "\\\\9.40.120.20\\rtassetBE\\AssetsDatabase_be.accdb"
+PASSWORD = "JoNiSi"
 
 def populate_fields():
     '''
         Populate dropdown boxes from database
+        return:
+            Op          list of operator initials
+            Roos        list of Roos chamber serials
+            Semiflex    list of semiflex serials
+            El          list of electrrometer serials
     '''
     print("Connecting to database...")
     connection_flag = True
+    # operators list
     fields = {'table': 'Operators', 'target': 'Initials', 'filter_var': None}
     Op = read_db_data(fields)
     if not Op:
@@ -54,6 +60,19 @@ def populate_fields():
     return Op, Roos, Semiflex, El
 
 def update_ref():
+    '''
+        Create a dictionary ref_data of most recent reference dose values
+        in OutputConsRef table.
+
+        list of reference dose energies:
+            ref_data['Energy']
+
+        lists of reference doses:
+            ref_data['Gantry 1']
+            ref_data['Gantry 2']
+            ref_data['Gantry 3']
+            ref_data['Gantry 4']
+    '''
     # instantiate reference data
     e_lst = list(range(240,69,-10))
     ref_data = {'Energy': e_lst,
@@ -62,27 +81,68 @@ def update_ref():
         'Gantry 3': [0]*len(e_lst),
         'Gantry 4': [0]*len(e_lst),
         }
-    # retrieve reference from DB
-    fields = {
-        'target': "Energy, [Gantry 1], [Gantry 2], [Gantry 3], [Gantry 4]",
-        'table': "OutputConsRef",
-        'filter_var': None,
-    }
-    records = read_db_data(fields)
-    #write to dict
-    for row in records:
-        en = int(row[0])
-        if en in e_lst:
-            idx = e_lst.index(en)
-            ref_data['Gantry 1'][idx]=row[1]
-            ref_data['Gantry 2'][idx]=row[2]
-            ref_data['Gantry 3'][idx]=row[3]
-            ref_data['Gantry 4'][idx]=row[4]
+    # connect to DB
+    if not DB_PATH:
+        sg.popup("Path Error.","Provide a path to the Access Database.")
+        print("Database Path Missing!")
+        return None
+    if PASSWORD:
+        new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;PWD=%s'%(DB_PATH,PASSWORD) 
+    else:
+        new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s'%(DB_PATH)   
+    try:  
+        conn = pypyodbc.connect(new_connection)               
+    except:
+        print("Connection to table reference failed...")
+        sg.popup("Could not connect to database","WARNING")
+    if isinstance(conn,pypyodbc.Connection):
+        # retrieve most recent reference data from DB
+        sql =   '''
+                Select A.Energy
+                    , A.[Machine Name]
+                    , A.RefDose
+                    , A.RefDate
+                From OutputConsRef As A
+                Inner Join (
+                    Select Energy
+                        , [Machine Name]
+                        , Max(RefDate) As MRefDate
+                    From OutputConsRef
+                    Group By Energy, [Machine Name]) As B
+                On A.Energy = B.Energy
+                And A.[Machine Name] = B.[Machine Name]
+                And A.RefDate = B.MRefDate
+            '''
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        records = cursor.fetchall()
+        cursor.close()
+        conn.commit()
+        conn = None        
+        #write to dict
+        for row in records:
+            en = row[0]
+            machine = row[1]
+            refdose = row[2]
+            if en in e_lst:
+                idx = e_lst.index(en)
+                ref_data[machine][idx]=refdose
     return ref_data
+
 
 def update_cal(Adate,roos,semiflex,elect):
     '''
-        Update calibration factors from database
+        Retrieve valid calibration factors from database
+        Input:
+            Adate       string timestamp in the format dd/mm/yyyy hh:mm:ss
+            roos        list of roos serial numbers
+            semiflex    list of semiflex serial numbers
+            elect       list of electrometer serial numbers
+
+        Return int values for:
+            kpol
+            ndw
+            kelec
     '''
     # concatenate all serial numbers
     roos = [str(int(i)) for i in roos]
@@ -133,7 +193,20 @@ def update_cal(Adate,roos,semiflex,elect):
 
 
 def read_db_data(fields):
-    ''' Return field records from a table as a list'''
+    '''
+        Helper function
+        Return record from a table as a list
+        If DB connection fails, return None
+        Input dict fields:
+            fields['target']        desired record field(s)
+            fields['table']         table containing the records
+            fields['filter_var']    field to filter records
+            fields['filter_val']    value of filter field
+        
+        Return:
+            data                    list of records
+    '''
+
     target = fields['target']
     table = fields['table']
     filter_var = fields['filter_var']
@@ -181,16 +254,22 @@ def read_db_data(fields):
         return None
 
 def write_session_data(conn, df_session):
-    '''Write to session table; return True if successful'''
-        
+    '''
+        Helper function
+        Write to session table and return True if successful, else false
+        Input:
+            conn            database connection object
+            df_session      dataframe of session table values
+    '''
+       
     cursor = conn.cursor()   
     sql = '''
             INSERT INTO "%s" (ADate, [Op1], [Op2], [T], [P], \
-                Electrometer, [V], [GA], Chamber, [kQ], [ks], [kelec], [kpol], NDW, TPC, Comments)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                Electrometer, [V], Gantry, [GA], Chamber, [kQ], \
+                    [ks], [kelec], [kpol], NDW, TPC, Comments)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           '''%(SESSION_TABLE)
-    data = df_session.values.tolist()[0]
-    
+    data = df_session.values.tolist()[0]    
     try:
         print("Writing session to database...")
         cursor.execute(sql, data)
@@ -205,35 +284,50 @@ def write_session_data(conn, df_session):
 
 
 def write_results_data(conn,df_results):
-    """Write results to table; return true if successful"""    
+    '''
+        Helper function
+        Write results to table and return True if successful
+        Input:
+            conn            database connection object
+            df_results      dataframe of results table values
+        
+        Return:
+            write_flag      True if write successful, else False
+    '''
     
     cursor = conn.cursor()   
     sql = '''
-            INSERT INTO "%s" (Rindex, ADate, Energy, [R], Ravg, \
-                [Rrange prcnt], RGy, Rref, Rdelta) 
-            VALUES (?,?,?,?,?,?,?,?,?)  
+            INSERT INTO "%s" (Rindex, ADate, Energy, [R], RGy) 
+            VALUES (?,?,?,?,?)  
          '''%(RESULTS_TABLE)
     print("Writing results to database...")
     write_flag = True
-    for i,row in df_results.iterrows():
+    for row in df_results.iterrows():
         try:
-            data = row.values.tolist()
-            for n,j in enumerate(data):
-                if not isinstance(j,(float, int, str)):
-                    data[n] = str(j)
+            data = [
+                str(row[1]['Rindex']),
+                str(row[1]['ADate']),
+                int(row[1]['Energy']),
+                float(row[1]['R']), 
+                float(row[1]['RGy']),                 
+            ]
             cursor.execute(sql, data)
         except IntegrityError:
             sg.popup("Results Write Error","WARNING: Write to database failed.")
-            print("Integrity Error, record "+str(i+1)+" not written to database")
-            write_flag = False
-        
+            print("Integrity Error, record "+str(row[0]+1)+" not written to database")
+            write_flag = False        
     conn.commit()
     cursor.close()
     return write_flag
 
 
 def write_to_db(df_session,df_results):
-    '''main function: write session and results dataframes to tables'''
+    '''
+        Write session and results dataframes to tables
+        Input:
+            df_session      dataframe of session table values   
+            df_results      dataframe of results table values
+    '''
     
     conn=None
 
