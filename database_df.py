@@ -178,7 +178,7 @@ def update_cal(Adate,roos,semiflex,elect):
         records = cursor.fetchall()
         cursor.close()
         conn.commit()
-        conn = None
+        #conn = None
         # cal factors to dicts
         for k in records:
             for x in ch_numbers:
@@ -189,7 +189,34 @@ def update_cal(Adate,roos,semiflex,elect):
                 if "["+y+"]" in k[0]:
                     kelec[y]=int(k[1])
 
-        return kpol, ndw, kelec
+        # query database for most recent gantry-specific cal factors
+        sql = '''
+            SELECT
+                Outputcons_ks.MachineName, Outputcons_ks.CorrFactorVal
+            FROM
+                (SELECT
+                    MachineName, Max(CalDate) AS MCalD
+                FROM
+                    Outputcons_ks
+                GROUP BY
+                    MachineName) AS B
+            INNER JOIN
+                Outputcons_ks
+            ON
+                Outputcons_ks.MachineName = B.MachineName AND
+                Outputcons_ks.CalDate = B.MCalD
+            WHERE
+                Outputcons_ks.CorrFactor LIKE 'ks'
+            '''
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        records = cursor.fetchall()
+        cursor.close()
+        conn.commit()
+        conn = None
+        ks = dict(records)
+
+        return kpol, ndw, kelec, ks
 
 
 def read_db_data(fields):
@@ -265,7 +292,7 @@ def write_session_data(conn, df_session):
     cursor = conn.cursor()   
     sql = '''
             INSERT INTO "%s" (ADate, [Op1], [Op2], [T], [P], \
-                Electrometer, [V], Gantry, [GA], Chamber, [kQ], \
+                Electrometer, [V], MachineName, [GA], Chamber, [kQ], \
                     [ks], [kelec], [kpol], NDW, TPC, Comments)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           '''%(SESSION_TABLE)

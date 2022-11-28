@@ -12,18 +12,16 @@ import re
 
 ### import data from database
 Op, Roos, Semiflex, El = db.populate_fields()
+currdatetime = datetime.datetime.today().strftime("%d/%m/%Y %H:%M:%S")
+kpol, ndw, kelec, ks = db.update_cal(currdatetime,Roos,Semiflex,El)
+kq=1.001
+rbe=1.1
 
 ### Calibration data (kpol, ndw, kelec will update from database when Adate is generated)
-kq=1.001
-ks={'Gantry 1': 1.003, 'Gantry 2': 1.003, 'Gantry 3': 1.003, 'Gantry 4': 1.003}
 selected_ks=None
-kpol={'3126': 1, '3128': 1, '3131': 1, '3132': 1, '142438': 1, '142586': 1, '142587': 1}
 selected_kpol=None
-kelec={'92579': 1, '92580': 1, '92581': 1}
 selected_kelec=None
-ndw={'3126': 84800000, '3128': 83790123, '3131': 83300000, '3132': 83700000, '142438': 584400000, '142586': 582619547, '142587': 585969341}
 selected_ndw=None
-rbe=1.1
 # dropdown list data
 G = ['Gantry 1', 'Gantry 2', 'Gantry 3', 'Gantry 4']
 Chtype = ['Roos', 'Semiflex']
@@ -413,13 +411,16 @@ while True:
             try:
                 refs = [ref_data[values['-G-']],ref_data['Energy']]
                 tstamp = values['ADate']
+                cnt=0
                 for i,_ in enumerate(layers[0]):
                     if window['diff'+str(i)].get() != '':
                         en = int(window['E'+str(i)].get())
                         idx = refs[1].index(en)
                         r_mean, r_range, d_mean, d_diff, d, r = calc_metrics(str(i))
                         for j, (rn, dn) in enumerate(zip(r,d)):
-                            results['Rindex'].append(re.sub('\ |\/|\:','',tstamp)+"_%02d_%01d"%(i,j))
+                            cnt += 1
+                            #results['Rindex'].append("%02d_%01d"%(i,j))
+                            results['Rindex'].append(str(cnt))
                             results['ADate'].append(values['ADate'])
                             results['Energy'].append(window['E'+str(i)].get())
                             results['R'].append(str(rn))
@@ -484,6 +485,15 @@ while True:
             db_flag=True
         except:
             print('ERROR: Failed write to database!')
+            # create timestamped folder
+            fldr = sg.popup_get_folder("DB write failed. Select a folder to save results:", "Save results to csv...", keep_on_top=True)
+            csv_time = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+            csv_dir = fldr+os.sep+values['-Export-']+os.sep+csv_time+'_'+values['-G-']
+            os.makedirs(csv_dir, exist_ok=True)
+            sess_df.to_csv(csv_dir+os.sep+'session.csv', index=False)
+            reslt_df.to_csv(csv_dir+os.sep+'result.csv', index=False)
+            print('Exported.')
+            export_flag=True
         if db_flag:
             #deactivate buttons
             window['-Submit-'](disabled=True)
@@ -587,7 +597,13 @@ while True:
 
     ### Update calibration factors
     if event == 'ADate':
-        kpol, ndw, kelec = db.update_cal(values['ADate'],Roos,Semiflex,El)
+        kpol, ndw, kelec, ks = db.update_cal(values['ADate'],Roos,Semiflex,El)
+        
+        if values['-G-'] in G:
+            selected_ks=ks[values['-G-']]
+            window['ks'](str(selected_ks))
+        else:
+            window['ks']('')
         
         if values['-Chtype-'] == 'Roos':
             Ch = Roos
@@ -602,8 +618,6 @@ while True:
             window['kelec'](str(selected_kelec)) 
         else:
             window['kelec']('') 
-        for i,_ in enumerate(layers[0]):
-            _=calc_metrics(str(i))
 
         if values['-Ch-'] in Ch:
             selected_ndw = ndw[values['-Ch-']]
@@ -615,6 +629,7 @@ while True:
             window['kq']('') 
             window['kpol']('')
             window['ndw']('') 
+
         for i,_ in enumerate(layers[0]):
             _=calc_metrics(str(i))
 
