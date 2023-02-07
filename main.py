@@ -449,6 +449,10 @@ while True:
             reslt_df = pd.DataFrame.from_dict(
                 {k: results[k] for k in results.keys() & {'Rindex', 'ADate', 'Energy', 'R', 'RGy'}}
                 )
+            
+            db.review_dose(sess_df,reslt_df)
+
+
             print('Results analysed.')
         else:
             #deactivate buttons
