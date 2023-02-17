@@ -4,6 +4,7 @@ Code: https://github.com/UCLHp/OutputConsistency
 Author: Alex Grimwood  
   
 Run example in python (Requires connection to database specified in config.cfg)  
+`python main.py`  
 
 * Fill in all Session, Calibration and Equipment fields  
 * Record your Measurements  
