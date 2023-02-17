@@ -5,6 +5,8 @@ Interaction with QA database
 """
 ####### check why GA180 in heatmap!!!
 import string
+import os
+import sys
 import PySimpleGUI as sg
 import pypyodbc
 from pypyodbc import IntegrityError
@@ -15,13 +17,18 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.ticker import FormatStrFormatter
 import seaborn as sns
+import configparser
 import datetime
 matplotlib.use('TkAgg')
 
-SESSION_TABLE = "OutputConsSession"
-RESULTS_TABLE = "OutputConsResults"
-DB_PATH = "\\\\9.40.120.20\\rtassetBE\\AssetsDatabase_be.accdb"
-PASSWORD = "JoNiSi"
+
+cfg = os.path.abspath(os.path.join(os.path.dirname(__file__), 'config.cfg'))
+config = configparser.ConfigParser()
+config.readfp(open(file=cfg))
+SESSION_TABLE = config.get('DB_DETAILS','SESSION_TABLE')
+RESULTS_TABLE = config.get('DB_DETAILS','RESULTS_TABLE')
+DB_PATH = config.get('DB_DETAILS','DB_PATH')
+PASSWORD = config.get('DB_DETAILS','PASSWORD')
 
 def populate_fields():
     '''
