@@ -3,7 +3,7 @@ Created on Thurs May 26 2022
 @author: Alex Grimwood
 Interaction with QA database
 """
-
+####### check why GA180 in heatmap!!!
 import string
 import PySimpleGUI as sg
 import pypyodbc
@@ -45,11 +45,12 @@ def populate_fields():
     # chamber list
     fields = {'table': 'Assets', 'target': "[Serial Number]", 'filter_var': "Model", 'filter_val': 'TW34001SC'}
     Roos = read_db_data(fields)
-    Roos = [str(int(i)) for i in Roos]
     if not Roos:
         print("Oops Roos")
         Roos = ['003126', '003128', '003131', '003132']
         connection_flag = False
+    else:
+        Roos = [str(int(i)) for i in Roos]
     fields['filter_val'] = 'TW31021'
     Semiflex = read_db_data(fields)
     if not Semiflex:
@@ -90,6 +91,7 @@ def update_ref():
         'Gantry 4': [0]*len(e_lst),
         }
     # connect to DB
+    conn=None
     if not DB_PATH:
         sg.popup("Path Error.","Provide a path to the Access Database.")
         print("Database Path Missing!")
@@ -179,8 +181,12 @@ def update_cal(Adate,roos,semiflex,elect):
             GROUP BY A.[Equipment])  AS CQ1 INNER JOIN Calibration \
             ON (CQ1.[MaxOfCal Date] = Calibration.[Cal Date]) AND (CQ1.Equipment = Calibration.Equipment) \
             WHERE ((Calibration.Operator) Is Not Null))  AS CQ2 ON Assets.Item = CQ2.Equipment;'''%(query_date)
-        new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;PWD=%s'%(DB_PATH,PASSWORD) 
-        conn = pypyodbc.connect(new_connection)  
+        try:
+            new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;PWD=%s'%(DB_PATH,PASSWORD) 
+            conn = pypyodbc.connect(new_connection) 
+        except:
+            return 1,1,1,1
+         
         cursor = conn.cursor()
         cursor.execute(sql)
         records = cursor.fetchall()
@@ -239,9 +245,12 @@ def review_dose(session_df=pd.DataFrame(), results_df=pd.DataFrame()):
         Output:
             A new window showing historic measurements as a heatmap (x-axis: date, y-axis: energy)
     '''
+    if session_df.empty or results_df.empty:
+        return
     
     # retrieve historic readings and join with latest session data
     query_gantry = session_df['Gantry'][0]
+    query_angle = session_df['GA'][0]
     # reformat date
     d = session_df['Adate'][0][0:2]
     m = session_df['Adate'][0][3:5]
@@ -269,14 +278,19 @@ def review_dose(session_df=pd.DataFrame(), results_df=pd.DataFrame()):
             INNER JOIN OutputConsResults B
             ON A.Adate = B.ADate
             WHERE A.[MachineName] LIKE '%%%s%%'
+            AND A.[GA]= %s
             AND (A.Adate BETWEEN #%s# AND #%s#)
-            '''%(query_gantry, query_date, query_date2)
+            '''%(query_gantry, query_angle, query_date, query_date2)
 
     new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;PWD=%s'%(DB_PATH,PASSWORD)   
     conn = pypyodbc.connect(new_connection)
     cursor = conn.cursor()
     cursor.execute(sql)
     records = cursor.fetchall()
+    if len(records)==0:
+        sg.popup("No Database Matches","No records in database match the equipment specified for this session")
+        return
+
     G = records[0][1]
     GA = str(int(records[0][2]))
     cursor.close()
@@ -427,8 +441,9 @@ def read_db_data(fields):
     try:  
         conn = pypyodbc.connect(new_connection)               
     except:
-        print("Connection to table "+table+" failed...")
+        print("Connection to table '"+table+"' failed...")
         sg.popup("Could not connect to database","WARNING")
+        return None
     if isinstance(conn,pypyodbc.Connection):
         if filter_var:
             sql = '''
@@ -467,8 +482,8 @@ def write_session_data(conn, df_session):
     sql = '''
             INSERT INTO "%s" (ADate, [Op1], [Op2], [T], [P], \
                 Electrometer, [V], MachineName, [GA], Chamber, [kQ], \
-                    [ks], [kelec], [kpol], NDW, TPC, Comments)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    [ks], [kelec], [kpol], NDW, TPC, Humidity, Comments)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           '''%(SESSION_TABLE)
     data = df_session.values.tolist()[0]    
     try:

@@ -185,6 +185,17 @@ def pre_analysis_check(values):
             check_fail.append([True,11])
             sg.popup("Invalid Value", "Select a value for: "+n)
             return check_fail
+
+    # check Humidity
+    try:
+        if not 0 <= float(values['H']) <= 100:
+            sg.popup("Invalid Value","Enter a percentage humidity between 0 and 100")
+            check_fail.append([True,12])
+            return check_fail
+    except:
+        sg.popup("Invalid Value","Humidity error, check entered value")
+        check_fail.append([True,13])
+        return check_fail
     
     return check_fail
         
@@ -224,6 +235,9 @@ def build_window():
         [sg.T('kpol', justification='right', size=(5,1)), sg.T(key='kpol', enable_events=True, size=(5,1), background_color='lightgray', text_color='black', justification='right')],
         [sg.T('RBE', justification='right', size=(5,1)), sg.T(str(rbe), key='rbe', enable_events=True, size=(5,1), background_color='lightgray', text_color='black', justification='right')],
         [sg.T('Ndw', justification='right', size=(5,1)), sg.T(key='ndw', enable_events=True, size=(8,1), background_color='lightgray', text_color='black', justification='right')],
+    ]
+    cal4_layout = [
+        [sg.T('H (%)', justification='right', size=(5,1)), sg.Input(key='H', enable_events=True, size=(12,1))],
     ]
 
     #equipment
@@ -301,14 +315,14 @@ def build_window():
         [sg.Text('Output Consistency:', font=['bold',18])],
         [sg.Frame('Session',[[sg.Column(sess0_layout), sg.Column(sess1_layout)]], size=(420,110)),
          sg.Frame('Calibration',[[sg.Column(cal0_layout), sg.Column(cal1_layout), sg.Column(cal3_layout)]], size=(420,110))],
-        [sg.Frame('Equipment',[[sg.Column(eq0_layout), sg.Column(eq1_layout), sg.Column(eq2_layout)]], size=(688,80))],
+        [sg.Frame('Equipment',[[sg.Column(eq0_layout), sg.Column(eq1_layout), sg.Column(eq2_layout)]], size=(688,80)), sg.Frame('Humidity',[[sg.Column(cal4_layout)]], size=(110,80))],
         [results_fields()],
         [sg.Frame('Comments', ml_layout)],
         [button_layout],
     ]
 
     icon_file = os.path.abspath(os.path.join(os.path.dirname(__file__), 'icon', 'strawberry_icon.ico'))
-    return sg.Window('Output Consistency', layout, resizable=True, finalize=True, return_keyboard_events=True, icon=icon_file)
+    return sg.Window('Output Consistency', layout, resizable=False, finalize=True, grab_anywhere=True, return_keyboard_events=True, icon=icon_file)
 
 
 ### Initialise output data dict
@@ -341,13 +355,15 @@ while True:
     event, values = window.read()
 
     if event == sg.WIN_CLOSED or event == 'Exit' or event == '-Cancel-': ### user closes window or clicks cancel
-        print('Window closed')
         break
 
     ### handle keyboard events
     if event == '-NEXT-':
-        next_element = window.find_element_with_focus().get_next_focus()
-        next_element.set_focus()
+        try:
+            next_element = window.find_element_with_focus().get_next_focus()
+            next_element.set_focus()
+        except:
+            "pass"
     if event == '-NEXTE-':
         try:
             next_element = window.find_element_with_focus().get_next_focus()
@@ -355,8 +371,11 @@ while True:
         except:
             "pass"
     if event == '-PREV-':
-        prev_element = window.find_element_with_focus().get_previous_focus()
-        prev_element.set_focus()
+        try:
+            prev_element = window.find_element_with_focus().get_previous_focus()
+            prev_element.set_focus()
+        except:
+            "pass"
 
     ### reset analysed flag if there is just about any event
     if event not in ['-Submit-','-AnalyseS-','-Export-','-ML-','-NEXT-','-NEXTE-','-PREV-',sg.WIN_CLOSED]:
@@ -402,6 +421,7 @@ while True:
                 session['kpol']=[window['kpol'].get()]
                 session['NDW']=[window['ndw'].get()]
                 session['TPC']=[str(tpc)]
+                session['Humidity']=[values['H']]
                 session['Comments']=[values['-ML-']]
             except:
                 session_analysed = False

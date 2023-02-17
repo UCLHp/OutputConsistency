@@ -1,4 +1,7 @@
-numpy
-PySimpleGUI
-pypyodbc
-pandas
+numpy==1.21.6
+PySimpleGUI==4.60.1
+pypyodbc==1.3.6
+pandas==1.3.5
+seaborn==0.12.2
+pywin32==304
+openpyxl==3.0.10
