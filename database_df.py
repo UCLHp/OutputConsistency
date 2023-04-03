@@ -263,7 +263,7 @@ def review_dose(session_df=pd.DataFrame(), results_df=pd.DataFrame()):
     m = session_df['Adate'][0][3:5]
     y = session_df['Adate'][0][6:10]
     query_date = "%s-%s-%s"%(int(y)-1,m,d) #confine historic record to previous 12 months
-    query_date2 = "%s-%s-%s"%(y,m,int(d)+1)    
+    query_date2 = "%s-%s-%s"%(y,m,int(d))    
     dfrec = pd.DataFrame()
     dfrec['Energy']=results_df['Energy'].astype(int)
     dfrec['RGy']=results_df['RGy'].astype(float)
@@ -290,9 +290,13 @@ def review_dose(session_df=pd.DataFrame(), results_df=pd.DataFrame()):
             '''%(query_gantry, query_angle, query_date, query_date2)
 
     new_connection = 'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;PWD=%s'%(DB_PATH,PASSWORD)   
-    conn = pypyodbc.connect(new_connection)
-    cursor = conn.cursor()
-    cursor.execute(sql)
+    try:
+        conn = pypyodbc.connect(new_connection)
+        cursor = conn.cursor()
+        cursor.execute(sql)
+    except:
+        sg.popup("Database Could Not Be Read","Check nobody is viewing the database and try again.")
+        return
     records = cursor.fetchall()
     if len(records)==0:
         sg.popup("No Database Matches","No records in database match the equipment specified for this session")
