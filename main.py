@@ -90,7 +90,7 @@ def calc_metrics(i):
         
         return r_mean, r_range, d_mean, d_diff, d, r
     else:
-        window['rm'+i]('')
+        window['rm'+i].Update('')
         window['rang'+i]('')
         window['diff'+i]('',background_color=diff_color, text_color='black')
         window['ad'+i]('')
@@ -306,8 +306,7 @@ def build_window():
         [sg.B('Check Session', key='-AnalyseS-'),
          sg.B('Submit to Database', disabled=True, key='-Submit-'),
          sg.FolderBrowse('Export to CSV', key='-CSV_WRITE-', disabled=True, target='-Export-'), sg.In(key='-Export-', enable_events=True, visible=False),
-         #sg.B('Clear', key='-Clear-'),
-         sg.B('End Session', key='-Cancel-')],
+         sg.B('Clear Results', button_color='red', key='-NxtSess-')],
     ]
 
     #combine layout elements
@@ -354,8 +353,29 @@ window.bind('<Up>', '-PREV-')
 while True:
     event, values = window.read()
 
-    if event == sg.WIN_CLOSED or event == 'Exit' or event == '-Cancel-': ### user closes window or clicks cancel
+    ### handle exit events
+    if event == sg.WIN_CLOSED or event == 'Exit': ### user closes window or clicks cancel
         break
+
+    ### clear fields on button press
+    if event == '-NxtSess-':
+        # deactivate buttons
+        window['-Submit-'](disabled=True)
+        window['-CSV_WRITE-'](disabled=True)
+        # clear readings
+        window['ADate'].Update('')
+        window['GA'].Update('')
+        window['-ML-'].Update('No comment')
+        for i,E in enumerate(layers[0]):
+            for r in range(1,6):
+                window['r'+str(i)+str(r)].update('') 
+            window['rm'+str(i)].update('') 
+            window['rang'+str(i)].update('') 
+            window['ad'+str(i)].update('') 
+            window['diff'+str(i)].update('', background_color='light gray')  
+
+
+
 
     ### handle keyboard events
     if event == '-NEXT-':
@@ -385,6 +405,12 @@ while True:
         
     ### Button event actions
     if event == '-AnalyseS-': ### Analyse results
+        dd = values['ADate'][0:2]
+        mm = values['ADate'][3:5]
+        yy = values['ADate'][6:10]
+        tt = values['ADate'][11:]
+        dt = yy+"/"+mm+"/"+dd+" "+tt
+
         session = {}
         results = {}
         results['Rindex']=[]
@@ -405,7 +431,7 @@ while True:
             print('ERROR: Session not analysed - check all information is entered correctly (Err Code: '+str(anal_flag[-1])+')')
         if session_analysed:
             try:
-                session['Adate']=[values['ADate']]
+                session['Adate']=[dt]
                 session['Op1']=[values['-Op1-']]
                 session['Op2']=[values['-Op2-']]
                 session['Temp']=[values['Temp']]
@@ -441,7 +467,7 @@ while True:
                             cnt += 1
                             #results['Rindex'].append("%02d_%01d"%(i,j))
                             results['Rindex'].append(str(cnt))
-                            results['ADate'].append(values['ADate'])
+                            results['ADate'].append(dt)
                             results['Energy'].append(window['E'+str(i)].get())
                             results['R'].append(str(rn))
                             results['Ravg'].append(str(r_mean))
@@ -523,6 +549,7 @@ while True:
             window['-Submit-'](disabled=True)
             window['ADate'].Update('')
             values['ADate']=''
+            window['-ML-'].Update('No comment')
         else:
             window['-CSV_WRITE-'](disabled=True)
             window['-Submit-'](disabled=True)

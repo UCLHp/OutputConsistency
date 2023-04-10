@@ -259,15 +259,18 @@ def review_dose(session_df=pd.DataFrame(), results_df=pd.DataFrame()):
     query_gantry = session_df['Gantry'][0]
     query_angle = session_df['GA'][0]
     # reformat date
-    d = session_df['Adate'][0][0:2]
-    m = session_df['Adate'][0][3:5]
-    y = session_df['Adate'][0][6:10]
+    #d = session_df['Adate'][0][0:2]
+    #m = session_df['Adate'][0][3:5]
+    #y = session_df['Adate'][0][6:10]
+    d = session_df['Adate'][0][8:10]
+    m = session_df['Adate'][0][5:7]
+    y = session_df['Adate'][0][0:4]
     query_date = "%s-%s-%s"%(int(y)-1,m,d) #confine historic record to previous 12 months
     query_date2 = "%s-%s-%s"%(y,m,int(d))    
     dfrec = pd.DataFrame()
     dfrec['Energy']=results_df['Energy'].astype(int)
     dfrec['RGy']=results_df['RGy'].astype(float)
-    dfrec['ADate']=[pd.to_datetime(session_df['Adate'][0], format='%d/%m/%Y %H:%M:%S') for x in range(len(dfrec.index))]
+    dfrec['ADate']=[pd.to_datetime(session_df['Adate'][0], format='%Y/%m/%d %H:%M:%S') for x in range(len(dfrec.index))]
 
     sql =   '''
             SELECT  A.Adate
@@ -496,7 +499,8 @@ def write_session_data(conn, df_session):
                     [ks], [kelec], [kpol], NDW, TPC, Humidity, Comments)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           '''%(SESSION_TABLE)
-    data = df_session.values.tolist()[0]    
+    data = df_session.values.tolist()[0]  
+    print(data[0])     
     try:
         print("Writing session to database...")
         cursor.execute(sql, data)
