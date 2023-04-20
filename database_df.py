@@ -116,18 +116,18 @@ def update_ref():
         # retrieve most recent reference data from DB
         sql =   '''
                 Select A.Energy
-                    , A.[Machine Name]
+                    , A.[MachineName]
                     , A.RefDose
                     , A.RefDate
                 From OutputConsRef As A
                 Inner Join (
                     Select Energy
-                        , [Machine Name]
+                        , [MachineName]
                         , Max(RefDate) As MRefDate
                     From OutputConsRef
-                    Group By Energy, [Machine Name]) As B
+                    Group By Energy, [MachineName]) As B
                 On A.Energy = B.Energy
-                And A.[Machine Name] = B.[Machine Name]
+                And A.[MachineName] = B.[MachineName]
                 And A.RefDate = B.MRefDate
             '''
         cursor = conn.cursor()
@@ -338,14 +338,14 @@ def review_dose(session_df=pd.DataFrame(), results_df=pd.DataFrame()):
         From OutputConsRef As A
         Inner Join (
             Select Energy
-                , [Machine Name]
+                , [MachineName]
                 , Max(RefDate) As MRefDate
             From OutputConsRef
-            Group By Energy, [Machine Name]) As B
+            Group By Energy, [MachineName]) As B
         On A.Energy = B.Energy
-        And A.[Machine Name] = B.[Machine Name]
+        And A.[MachineName] = B.[MachineName]
         And A.RefDate = B.MRefDate
-        WHERE  A.[Machine Name] LIKE '%%%s%%'
+        WHERE  A.[MachineName] LIKE '%%%s%%'
     '''%(query_gantry)
 
     cursor = conn.cursor()
