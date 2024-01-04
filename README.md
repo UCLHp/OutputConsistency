@@ -23,5 +23,10 @@ Code for building and running GUI. It also includes functions for analysing data
 * `build_window()`: generates GUI window.
 * GUI actions are handled within the `while` loop.
 
-
+## `database_df.py`
+Code for interaction with QA database and data visualisation.
+* `populate_fields()`: Pulls information from QA database to populate dropdown lists of operators and chamber details.
+* `update_cal()`: Retrieves valid calibration factors from database.
+*  `review_dose()`: pulls historic values from the QA database and combines them with current session's results. Results are then plotted in a heatmap.
+*  `write_to_db(df_session,df_results)`: Writes session and results dataframes to QA database tables
 
